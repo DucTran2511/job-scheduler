@@ -1,0 +1,21 @@
+name: daily_etl
+description: Daily ETL pipeline
+tasks:
+  - id: extract
+    name: Extract data
+    command: python extract.py
+  - id: transform
+    name: Transform
+    depends_on:
+      - extract
+    command: python transform.py --input /tmp/extract.json
+  - id: load
+    name: Load
+    depends_on:
+      - transform
+    command: python load.py --input /tmp/transform.json
+  - id: notify
+    name: Notify
+    depends_on:
+      - transform
+    command: python notify.py --message "ETL done"
