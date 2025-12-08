@@ -18,7 +18,8 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "task_runs")
-@Getter @Setter
+@Getter
+@Setter
 public class TaskRun {
 
     @Id
@@ -34,6 +35,8 @@ public class TaskRun {
 
     private String taskName;
     private String command;
+    private String taskType = "SHELL";  // Default to SHELL for backward compatibility
+    private Integer timeoutSeconds;      // Task execution timeout (null = no timeout)
 
     @Enumerated(EnumType.STRING)
     private TaskStatus status = TaskStatus.PENDING;

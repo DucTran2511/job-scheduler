@@ -24,8 +24,8 @@ public class WorkflowEntity {
 
     private String description;
 
+    @Column(columnDefinition = "TEXT")
     private String rawDefinition;
 
     private LocalDateTime createdAt = LocalDateTime.now();
 }
-

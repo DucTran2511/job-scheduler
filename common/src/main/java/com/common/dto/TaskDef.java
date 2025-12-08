@@ -11,9 +11,9 @@ public class TaskDef {
     private String id;
     private String name;
     private String command;
+    private String taskType;  // SHELL, HTTP, PYTHON, DOCKER
     private List<String> depends_on;
     private Integer maxRetries;
     private Integer timeoutSeconds;
     private Object params;
 }
-

@@ -13,8 +13,13 @@ public class RedisStreamConfig {
     public RedisTemplate<String, String> redisTemplate(RedisConnectionFactory factory) {
         RedisTemplate<String, String> t = new RedisTemplate<>();
         t.setConnectionFactory(factory);
-        t.setKeySerializer(new StringRedisSerializer());
-        t.setValueSerializer(new StringRedisSerializer());
+        StringRedisSerializer stringSerializer = new StringRedisSerializer();
+        t.setKeySerializer(stringSerializer);
+        t.setValueSerializer(stringSerializer);
+        t.setHashKeySerializer(stringSerializer);
+        t.setHashValueSerializer(stringSerializer);
+
+        t.afterPropertiesSet();
         return t;
     }
 
