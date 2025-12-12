@@ -1,0 +1,52 @@
+name: security_vulnerability_scan
+description: Scan application for security vulnerabilities
+tasks:
+  - id: checkout_repo
+    name: Clone Repository
+    command: git clone https://github.com/mycompany/myapp.git /tmp/security-scan
+    maxRetries: 2
+
+  - id: dependency_check
+    name: Check Dependencies for CVEs
+    depends_on:
+      - checkout_repo
+    command: cd /tmp/security-scan && npm audit --audit-level=high
+    maxRetries: 1
+
+  - id: code_scan
+    name: Static Code Analysis
+    depends_on:
+      - checkout_repo
+    command: cd /tmp/security-scan && sonarqube-scanner -Dsonar.projectKey=myapp -Dsonar.sources=.
+    maxRetries: 2
+
+  - id: secret_scan
+    name: Scan for Hardcoded Secrets
+    depends_on:
+      - checkout_repo
+    command: cd /tmp/security-scan && gitleaks detect --verbose --no-git
+    maxRetries: 1
+
+  - id: docker_scan
+    name: Scan Docker Images
+    depends_on:
+      - checkout_repo
+    command: docker scan myapp:latest --severity high
+    maxRetries: 2
+
+  - id: generate_report
+    name: Generate Security Report
+    depends_on:
+      - dependency_check
+      - code_scan
+      - secret_scan
+      - docker_scan
+    command: echo "Security scan completed. Check logs for details." > /tmp/security-report.txt
+    maxRetries: 1
+
+  - id: send_to_slack
+    name: Post Report to Slack
+    depends_on:
+      - generate_report
+    command: curl -X POST -H 'Content-type:application/json' --data '{"text":"🔒 Security scan completed. Review required!"}' https://hooks.slack.com/services/YOUR_WEBHOOK
+

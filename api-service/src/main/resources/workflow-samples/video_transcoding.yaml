@@ -1,0 +1,80 @@
+name: video_processing_pipeline
+description: Transcode and optimize uploaded videos
+tasks:
+  - id: download_video
+    name: Download Video from Upload Bucket
+    command: aws s3 cp s3://video-uploads/pending/video.mp4 /tmp/original.mp4
+    maxRetries: 3
+
+  - id: extract_thumbnail
+    name: Extract Video Thumbnail
+    depends_on:
+      - download_video
+    command: ffmpeg -i /tmp/original.mp4 -ss 00:00:03 -vframes 1 /tmp/thumbnail.jpg
+    maxRetries: 2
+
+  - id: transcode_1080p
+    name: Transcode to 1080p
+    depends_on:
+      - download_video
+    command: ffmpeg -i /tmp/original.mp4 -vf scale=1920:1080 -c:v libx264 -preset medium -crf 23 /tmp/video_1080p.mp4
+    maxRetries: 2
+
+  - id: transcode_720p
+    name: Transcode to 720p
+    depends_on:
+      - download_video
+    command: ffmpeg -i /tmp/original.mp4 -vf scale=1280:720 -c:v libx264 -preset medium -crf 23 /tmp/video_720p.mp4
+    maxRetries: 2
+
+  - id: transcode_480p
+    name: Transcode to 480p
+    depends_on:
+      - download_video
+    command: ffmpeg -i /tmp/original.mp4 -vf scale=854:480 -c:v libx264 -preset medium -crf 23 /tmp/video_480p.mp4
+    maxRetries: 2
+
+  - id: upload_1080p
+    name: Upload 1080p to CDN
+    depends_on:
+      - transcode_1080p
+    command: aws s3 cp /tmp/video_1080p.mp4 s3://video-cdn/1080p/ --acl public-read
+    maxRetries: 3
+
+  - id: upload_720p
+    name: Upload 720p to CDN
+    depends_on:
+      - transcode_720p
+    command: aws s3 cp /tmp/video_720p.mp4 s3://video-cdn/720p/ --acl public-read
+    maxRetries: 3
+
+  - id: upload_480p
+    name: Upload 480p to CDN
+    depends_on:
+      - transcode_480p
+    command: aws s3 cp /tmp/video_480p.mp4 s3://video-cdn/480p/ --acl public-read
+    maxRetries: 3
+
+  - id: upload_thumbnail
+    name: Upload Thumbnail
+    depends_on:
+      - extract_thumbnail
+    command: aws s3 cp /tmp/thumbnail.jpg s3://video-cdn/thumbnails/ --acl public-read
+    maxRetries: 2
+
+  - id: update_database
+    name: Mark Video as Processed
+    depends_on:
+      - upload_1080p
+      - upload_720p
+      - upload_480p
+      - upload_thumbnail
+    command: psql -U jobuser -d videodb -c "UPDATE videos SET status='processed', processed_at=NOW() WHERE filename='video.mp4'"
+    maxRetries: 2
+
+  - id: cleanup
+    name: Remove Temporary Files
+    depends_on:
+      - update_database
+    command: rm -f /tmp/original.mp4 /tmp/video_*.mp4 /tmp/thumbnail.jpg
+

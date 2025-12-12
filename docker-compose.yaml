@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: job_postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: jobuser
+      POSTGRES_PASSWORD: jobpass
+      POSTGRES_DB: jobdb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobuser -d jobdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: job_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api-service:
+    build:
+      context: ./api-service
+      dockerfile: Dockerfile
+    container_name: job_api_service
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: job_postgres
+      DB_PORT: 5432
+      DB_NAME: jobdb
+      DB_USER: jobuser
+      DB_PASSWORD: jobpass
+      REDIS_HOST: job_redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 10s          # ← Check health every 10 seconds
+      timeout: 5s            # ← Timeout if no response in 5 seconds
+      retries: 3             # ← Mark unhealthy after 3 consecutive failures
+      start_period: 40s      # ← Wait 40 seconds before first check (app startup)
+
+  worker-service:
+    build:
+      context: ./worker-service
+      dockerfile: Dockerfile
+    container_name: job_worker_service
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      DB_HOST: job_postgres
+      DB_PORT: 5432
+      DB_NAME: jobdb
+      DB_USER: jobuser
+      DB_PASSWORD: jobpass
+      REDIS_HOST: job_redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 15s          # ← Check health every 15 seconds
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    deploy:
+      replicas: 2
+
+volumes:
+  pgdata:

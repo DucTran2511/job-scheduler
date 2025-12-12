@@ -1,0 +1,58 @@
+name: bulk_image_processing
+description: Process and optimize images uploaded by users
+tasks:
+  - id: download_images
+    name: Download New Images from S3
+    command: aws s3 sync s3://user-uploads/pending/ /tmp/images/ --exclude "*" --include "*.jpg" --include "*.png"
+    maxRetries: 3
+
+  - id: resize_thumbnails
+    name: Create Thumbnails
+    depends_on:
+      - download_images
+    command: for img in /tmp/images/*.{jpg,png}; do convert "$img" -resize 200x200 "/tmp/thumbnails/$(basename $img)"; done
+    maxRetries: 2
+
+  - id: resize_medium
+    name: Create Medium Size
+    depends_on:
+      - download_images
+    command: for img in /tmp/images/*.{jpg,png}; do convert "$img" -resize 800x800 "/tmp/medium/$(basename $img)"; done
+    maxRetries: 2
+
+  - id: compress_images
+    name: Compress Original Images
+    depends_on:
+      - resize_thumbnails
+      - resize_medium
+    command: for img in /tmp/images/*.{jpg,png}; do jpegoptim --max=85 "$img"; done
+    maxRetries: 1
+
+  - id: upload_thumbnails
+    name: Upload Thumbnails to CDN
+    depends_on:
+      - compress_images
+    command: aws s3 sync /tmp/thumbnails/ s3://cdn.myapp.com/thumbnails/ --acl public-read
+    maxRetries: 3
+
+  - id: upload_medium
+    name: Upload Medium Images to CDN
+    depends_on:
+      - compress_images
+    command: aws s3 sync /tmp/medium/ s3://cdn.myapp.com/medium/ --acl public-read
+    maxRetries: 3
+
+  - id: update_database
+    name: Update Image URLs in Database
+    depends_on:
+      - upload_thumbnails
+      - upload_medium
+    command: psql -U jobuser -d jobdb -c "UPDATE images SET processed=true, thumbnail_url='https://cdn.myapp.com/thumbnails/', medium_url='https://cdn.myapp.com/medium/' WHERE processed=false"
+    maxRetries: 2
+
+  - id: cleanup
+    name: Clean Temporary Files
+    depends_on:
+      - update_database
+    command: rm -rf /tmp/images/* /tmp/thumbnails/* /tmp/medium/*
+

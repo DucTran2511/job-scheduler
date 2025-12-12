@@ -1,0 +1,42 @@
+name: database_backup_workflow
+description: Backup databases and upload to cloud storage
+tasks:
+  - id: backup_postgres
+    name: Backup PostgreSQL Database
+    command: pg_dump -U jobuser -h localhost jobdb > /tmp/backup_$(date +%Y%m%d).sql
+    maxRetries: 2
+
+  - id: compress_backup
+    name: Compress Backup File
+    depends_on:
+      - backup_postgres
+    command: gzip /tmp/backup_$(date +%Y%m%d).sql
+    maxRetries: 1
+
+  - id: upload_to_s3
+    name: Upload to AWS S3
+    depends_on:
+      - compress_backup
+    command: aws s3 cp /tmp/backup_$(date +%Y%m%d).sql.gz s3://my-backups/postgres/ --storage-class GLACIER
+    maxRetries: 3
+
+  - id: verify_backup
+    name: Verify Backup Integrity
+    depends_on:
+      - upload_to_s3
+    command: aws s3 ls s3://my-backups/postgres/backup_$(date +%Y%m%d).sql.gz && echo "Backup verified"
+    maxRetries: 2
+
+  - id: cleanup_old_backups
+    name: Remove Local Backup
+    depends_on:
+      - verify_backup
+    command: rm -f /tmp/backup_*.sql.gz
+    maxRetries: 1
+
+  - id: send_report
+    name: Email Backup Report
+    depends_on:
+      - cleanup_old_backups
+    command: echo "Database backup completed successfully" | mail -s "Backup Report $(date)" admin@company.com
+
