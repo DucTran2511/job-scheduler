@@ -7,9 +7,6 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 
-/**
- * Configuration for HTTP clients
- */
 @Configuration
 public class RestTemplateConfig {
 
@@ -21,4 +18,3 @@ public class RestTemplateConfig {
                 .build();
     }
 }
-

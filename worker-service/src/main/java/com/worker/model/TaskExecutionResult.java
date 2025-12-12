@@ -5,48 +5,19 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Result of task execution
- */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class TaskExecutionResult {
 
-    /**
-     * Whether the task succeeded
-     */
     private boolean success;
-
-    /**
-     * Task output (stdout)
-     */
     private String output;
-
-    /**
-     * Error output (stderr)
-     */
     private String errorOutput;
-
-    /**
-     * Exit code (for shell/process executors)
-     */
     private Integer exitCode;
-
-    /**
-     * Error message if task failed
-     */
     private String errorMessage;
-
-    /**
-     * Execution duration in milliseconds
-     */
     private Long executionTimeMs;
 
-    /**
-     * Create a successful result
-     */
     public static TaskExecutionResult success(String output) {
         return TaskExecutionResult.builder()
                 .success(true)
@@ -55,9 +26,6 @@ public class TaskExecutionResult {
                 .build();
     }
 
-    /**
-     * Create a failed result
-     */
     public static TaskExecutionResult failure(String errorMessage) {
         return TaskExecutionResult.builder()
                 .success(false)
@@ -66,9 +34,6 @@ public class TaskExecutionResult {
                 .build();
     }
 
-    /**
-     * Create a failed result with exit code
-     */
     public static TaskExecutionResult failure(int exitCode, String errorOutput) {
         return TaskExecutionResult.builder()
                 .success(false)
@@ -78,4 +43,3 @@ public class TaskExecutionResult {
                 .build();
     }
 }
-

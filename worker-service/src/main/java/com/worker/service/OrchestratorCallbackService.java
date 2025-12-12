@@ -11,9 +11,6 @@ import org.springframework.web.client.RestTemplate;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Service for reporting task completion back to the orchestrator
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -30,14 +27,6 @@ public class OrchestratorCallbackService {
     @Value("${orchestrator.callback.retry-delay-ms:1000}")
     private long retryDelayMs;
 
-    /**
-     * Report task completion to orchestrator
-     *
-     * @param workflowRunId The workflow run ID
-     * @param taskId The task ID
-     * @param success Whether the task succeeded
-     * @param errorMessage Error message if task failed
-     */
     public void reportTaskCompletion(String workflowRunId, String taskId, boolean success, String errorMessage) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("workflowRunId", workflowRunId);
@@ -48,9 +37,6 @@ public class OrchestratorCallbackService {
         reportWithRetry(payload);
     }
 
-    /**
-     * Report to orchestrator with retry logic
-     */
     private void reportWithRetry(Map<String, Object> payload) {
         int attempt = 0;
         Exception lastException = null;
@@ -68,12 +54,12 @@ public class OrchestratorCallbackService {
                 );
 
                 if (response.getStatusCode().is2xxSuccessful()) {
-                    log.info("✅ Successfully reported task {} completion to orchestrator",
+                    log.info("Successfully reported task {} completion to orchestrator",
                             payload.get("taskId"));
                     return;
                 }
 
-                log.warn("⚠️ Orchestrator returned non-2xx status: {}", response.getStatusCode());
+                log.warn("Orchestrator returned non-2xx status: {}", response.getStatusCode());
 
             } catch (RestClientException e) {
                 lastException = e;
@@ -92,9 +78,8 @@ public class OrchestratorCallbackService {
             }
         }
 
-        log.error("🚫 Failed to report task {} completion after {} attempts. Last error: {}",
+        log.error("Failed to report task {} completion after {} attempts. Last error: {}",
                  payload.get("taskId"), maxRetries,
                  lastException != null ? lastException.getMessage() : "Unknown");
     }
 }
-
