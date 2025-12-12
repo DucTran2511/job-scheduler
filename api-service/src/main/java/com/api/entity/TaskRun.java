@@ -35,8 +35,8 @@ public class TaskRun {
 
     private String taskName;
     private String command;
-    private String taskType = "SHELL";  // Default to SHELL for backward compatibility
-    private Integer timeoutSeconds;      // Task execution timeout (null = no timeout)
+    private String taskType = "SHELL";
+    private Integer timeoutSeconds;
 
     @Enumerated(EnumType.STRING)
     private TaskStatus status = TaskStatus.PENDING;

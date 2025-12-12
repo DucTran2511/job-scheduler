@@ -21,9 +21,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * Service for querying workflow runs and their status
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -32,9 +29,6 @@ public class WorkflowQueryService {
     private final WorkflowRunRepository workflowRunRepository;
     private final TaskRunRepository taskRunRepository;
 
-    /**
-     * List all workflow runs with pagination and optional status filter
-     */
     @Transactional(readOnly = true)
     public Page<WorkflowRunDTO> listWorkflows(int page, int size, String status) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "startedAt"));
@@ -56,17 +50,11 @@ public class WorkflowQueryService {
         return workflowRuns.map(WorkflowRunDTO::from);
     }
 
-    /**
-     * Get detailed workflow run information including all tasks
-     */
     @Transactional(readOnly = true)
     public WorkflowRunDetailDTO getWorkflowDetail(String runId) {
         return null;
     }
 
-    /**
-     * Get all tasks for a specific workflow run
-     */
     @Transactional(readOnly = true)
     public List<TaskRunDTO> getWorkflowTasks(String runId) {
         return null;

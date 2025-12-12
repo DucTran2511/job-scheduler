@@ -8,9 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-/**
- * DTO for listing workflows with basic information
- */
+
 @Data
 @Builder
 @NoArgsConstructor

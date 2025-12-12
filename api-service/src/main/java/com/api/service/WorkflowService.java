@@ -18,9 +18,6 @@ public class WorkflowService {
 
     private final WorkflowRepository workflowRepository;
 
-    /**
-     * Create a new workflow definition
-     */
     @Transactional
     public WorkflowEntity createWorkflow(String name, String description, String rawDefinition) {
         log.info("Creating workflow: {}", name);
@@ -34,25 +31,16 @@ public class WorkflowService {
         return workflowRepository.save(workflow);
     }
 
-    /**
-     * Get workflow by ID
-     */
     public Optional<WorkflowEntity> getWorkflowById(String id) {
         log.debug("Fetching workflow by id: {}", id);
         return workflowRepository.findById(id);
     }
 
-    /**
-     * Get all workflows
-     */
     public List<WorkflowEntity> getAllWorkflows() {
         log.debug("Fetching all workflows");
         return workflowRepository.findAll();
     }
 
-    /**
-     * Update an existing workflow
-     */
     @Transactional
     public WorkflowEntity updateWorkflow(String id, String description, String rawDefinition) {
         log.info("Updating workflow: {}", id);
@@ -70,9 +58,6 @@ public class WorkflowService {
         return workflowRepository.save(workflow);
     }
 
-    /**
-     * Delete a workflow by ID
-     */
     @Transactional
     public void deleteWorkflow(String id) {
         log.info("Deleting workflow: {}", id);
@@ -84,16 +69,10 @@ public class WorkflowService {
         workflowRepository.deleteById(id);
     }
 
-    /**
-     * Check if workflow exists
-     */
     public boolean workflowExists(String id) {
         return workflowRepository.existsById(id);
     }
 
-    /**
-     * Count total workflows
-     */
     public long countWorkflows() {
         return workflowRepository.count();
     }

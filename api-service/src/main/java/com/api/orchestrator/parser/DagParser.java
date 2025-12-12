@@ -28,19 +28,10 @@ public class DagParser {
         this.yamlMapper = new ObjectMapper(new YAMLFactory());
     }
 
-    /**
-     * Parse YAML or JSON content into DagDefinition (POJOs).
-     * The method accepts either YAML or JSON that maps to DagDefinition.
-     */
     public DagDefinition parseDefinition(String yamlOrJson) throws Exception {
-        // The YAMLFactory ObjectMapper will also parse JSON fine.
         return yamlMapper.readValue(yamlOrJson, DagDefinition.class);
     }
 
-    /**
-     * Build a JGraphT DirectedAcyclicGraph from DagDefinition.
-     * Throws IllegalArgumentException if graph contains cycles or missing references.
-     */
     public DirectedAcyclicGraph<String, DefaultEdge> buildGraph(DagDefinition def) {
         if (def == null) throw new IllegalArgumentException("DagDefinition is null");
         if (def.getTasks() == null) throw new IllegalArgumentException("No tasks defined in DAG");
@@ -48,7 +39,6 @@ public class DagParser {
         DirectedAcyclicGraph<String, DefaultEdge> dag =
                 new DirectedAcyclicGraph<>(DefaultEdge.class);
 
-        // Add all task ids as vertices
         Set<String> taskIds = new HashSet<>();
         for (TaskDef t : def.getTasks()) {
             if (t.getId() == null || t.getId().isBlank()) {
@@ -60,7 +50,6 @@ public class DagParser {
             dag.addVertex(t.getId());
         }
 
-        // Add edges for dependencies: for each task T, for each dependency D in depends_on, add edge D -> T
         for (TaskDef t : def.getTasks()) {
             List<String> deps = t.getDepends_on();
             if (deps == null) continue;
@@ -68,12 +57,10 @@ public class DagParser {
                 if (!dag.containsVertex(dep)) {
                     throw new IllegalArgumentException("Task '" + t.getId() + "' depends on unknown task '" + dep + "'");
                 }
-                // add edge from dep -> t
                 dag.addEdge(dep, t.getId());
             }
         }
 
-        // Detect cycles (should not happen with DirectedAcyclicGraph but double-check)
         CycleDetector<String, DefaultEdge> detector = new CycleDetector<>(dag);
         if (detector.detectCycles()) {
             Set<String> cyc = detector.findCycles();
@@ -83,9 +70,6 @@ public class DagParser {
         return dag;
     }
 
-    /**
-     * Returns tasks in topological order (ready-to-execute order)
-     */
     public List<String> topologicalOrder(DirectedAcyclicGraph<String, DefaultEdge> dag) {
         List<String> ordered = new ArrayList<>();
         TopologicalOrderIterator<String, DefaultEdge> it = new TopologicalOrderIterator<>(dag);

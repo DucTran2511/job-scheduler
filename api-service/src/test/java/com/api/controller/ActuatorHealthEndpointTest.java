@@ -10,9 +10,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/**
- * Test to demonstrate that Actuator endpoints exist without creating controllers
- */
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
@@ -27,9 +24,6 @@ class ActuatorHealthEndpointTest {
 
     @Test
     void actuatorHealthEndpoint_ShouldExist_WithoutCreatingController() throws Exception {
-        // This test proves that /actuator/health exists automatically
-        // You don't need to create a controller for it!
-
         mockMvc.perform(get("/actuator/health"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").exists());
@@ -58,16 +52,8 @@ class ActuatorHealthEndpointTest {
 
     @Test
     void customHealthIndicators_ShouldBeIncluded_InHealthResponse() throws Exception {
-        // Our custom health indicators (RedisStreamHealthIndicator,
-        // WorkflowOrchestratorHealthIndicator) are automatically discovered
-        // and included in the /actuator/health response
-
         mockMvc.perform(get("/actuator/health"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").exists());
-
-        // The components are included automatically by Spring Boot Actuator
-        // No controller code needed!
     }
 }
-

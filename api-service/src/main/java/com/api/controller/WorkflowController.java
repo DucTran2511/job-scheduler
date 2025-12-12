@@ -22,10 +22,6 @@ public class WorkflowController {
 
     private final WorkflowOrchestrator orchestrator;
 
-    /**
-     * POST raw YAML/JSON as text/plain body to start a workflow run.
-     * Returns the workflowRunId on success.
-     */
     @PostMapping(value = "/start", consumes = "text/plain")
     public ResponseEntity<?> startWorkflow(@RequestBody String yamlOrJson) {
         try {

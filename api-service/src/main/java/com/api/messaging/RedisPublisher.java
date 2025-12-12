@@ -20,25 +20,14 @@ public class RedisPublisher {
         this.redisTemplate = redisTemplate;
     }
 
-
-    /**
-     * Publish a task message that workers will pick up.
-     * Message fields include runId, taskId, command (payload), and optional meta.
-     */
     public void publishTask(String workflowRunId, String taskId, String command) {
         publishTask(workflowRunId, taskId, "SHELL", command, null, null);
     }
 
-    /**
-     * Publish a task message with specific task type.
-     */
     public void publishTask(String workflowRunId, String taskId, String taskType, String command) {
         publishTask(workflowRunId, taskId, taskType, command, null, null);
     }
 
-    /**
-     * Publish a task message with full configuration.
-     */
     public void publishTask(String workflowRunId, String taskId, String taskType, String command,
                            String taskName, Integer timeoutSeconds) {
         Map<String, String> fields = new HashMap<>();
@@ -47,7 +36,6 @@ public class RedisPublisher {
         fields.put("taskType", taskType == null ? "SHELL" : taskType);
         fields.put("command", command == null ? "" : command);
 
-        // Add optional fields
         if (taskName != null && !taskName.isEmpty()) {
             fields.put("taskName", taskName);
         }
@@ -55,13 +43,11 @@ public class RedisPublisher {
             fields.put("timeoutSeconds", String.valueOf(timeoutSeconds));
         }
 
-        // Add minimal metadata
         RecordId id = redisTemplate.opsForStream().add(
                 StreamRecords.string(fields).withStreamKey(taskStream)
         );
 
-        // Log for debugging
-        System.out.println("📤 Published task to Redis Stream: workflowRunId=" + workflowRunId +
+        System.out.println("Published task to Redis Stream: workflowRunId=" + workflowRunId +
                           ", taskId=" + taskId + ", taskType=" + taskType + ", streamId=" + id);
     }
 }

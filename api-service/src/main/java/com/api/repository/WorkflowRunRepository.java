@@ -8,6 +8,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface WorkflowRunRepository extends JpaRepository<WorkflowRun, String> {
     Page<WorkflowRun> findByStatus(WorkflowRun.RunStatus status, Pageable pageable);
 
-    // Count workflows by status (for health checks)
     long countByStatus(WorkflowRun.RunStatus status);
 }

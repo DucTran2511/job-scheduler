@@ -13,6 +13,5 @@ public interface TaskRunRepository extends JpaRepository<TaskRun, String> {
     List<TaskRun> findByTaskId(String taskId);
     List<TaskRun> findByStatus(TaskRun.TaskStatus status);
 
-    // Efficient count query for checking workflow completion
     long countByWorkflowRunIdAndStatusNot(String workflowRunId, TaskRun.TaskStatus status);
 }
