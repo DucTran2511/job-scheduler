@@ -28,7 +28,7 @@ public class WorkflowSchedule {
     private String id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "workflow_id", nullable = false)
+    @JoinColumn(name = "workflow_id")
     private WorkflowEntity workflow;
 
     @Column(nullable = false)
@@ -79,4 +79,3 @@ public class WorkflowSchedule {
         this.updatedAt = LocalDateTime.now();
     }
 }
-
