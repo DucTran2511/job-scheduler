@@ -28,8 +28,11 @@ public class WorkflowSchedule {
     private String id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "workflow_id", nullable = false)
+    @JoinColumn(name = "workflow_id")
     private WorkflowEntity workflow;
+
+    @Column(columnDefinition = "TEXT")
+    private String rawDefinition;
 
     @Column(nullable = false)
     private String name;
@@ -58,6 +61,10 @@ public class WorkflowSchedule {
 
     private LocalDateTime lastRunAt;
 
+    private Boolean catchUp = false;
+
+    private Integer maxConcurrent = 1;
+
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt = LocalDateTime.now();
 
@@ -79,4 +86,3 @@ public class WorkflowSchedule {
         this.updatedAt = LocalDateTime.now();
     }
 }
-

@@ -1,6 +1,8 @@
 package com.api.controller;
 
 import com.api.orchestrator.WorkflowOrchestrator;
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.dataformat.yaml.YAMLParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -27,9 +29,13 @@ public class WorkflowController {
         try {
             String runId = orchestrator.startWorkflow(yamlOrJson);
             return ResponseEntity.ok().body(new StartResponse(runId));
-        } catch (Exception e) {
-            log.error("Failed to start workflow", e);
+
+        } catch (JsonParseException e){
+            log.error("User send bad payload", e);
             return ResponseEntity.badRequest().body(new ErrorResponse("parse_error", e.getMessage()));
+        }catch (Exception e) {
+            log.error("Failed to start workflow", e);
+            return ResponseEntity.badRequest().body(new ErrorResponse("system_error", e.getMessage()));
         }
     }
 
