@@ -10,9 +10,11 @@ import java.time.LocalDateTime;
 public class WorkflowScheduleResponseDTO {
     private String id;
     private String name;
+    private String description;
     private String cronExpression;
     private String timezone;
     private String status;
     private LocalDateTime nextRunAt;
+    private LocalDateTime lastRunAt;
     private LocalDateTime createdAt;
 }

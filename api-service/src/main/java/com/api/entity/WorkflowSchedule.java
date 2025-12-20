@@ -31,6 +31,9 @@ public class WorkflowSchedule {
     @JoinColumn(name = "workflow_id")
     private WorkflowEntity workflow;
 
+    @Column(columnDefinition = "TEXT")
+    private String rawDefinition;
+
     @Column(nullable = false)
     private String name;
 
@@ -57,6 +60,10 @@ public class WorkflowSchedule {
     private WorkflowRun lastRun;
 
     private LocalDateTime lastRunAt;
+
+    private Boolean catchUp = false;
+
+    private Integer maxConcurrent = 1;
 
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt = LocalDateTime.now();

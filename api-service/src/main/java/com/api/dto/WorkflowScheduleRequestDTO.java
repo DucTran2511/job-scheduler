@@ -16,4 +16,6 @@ public class WorkflowScheduleRequestDTO {
     private String timezone;
     private String scheduleType;
     private String workflowDefinition;
+    private Boolean catchUp;
+    private Integer maxConcurrent;
 }
