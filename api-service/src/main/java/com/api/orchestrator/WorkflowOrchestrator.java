@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -69,7 +70,8 @@ public class WorkflowOrchestrator {
             tr.setTimeoutSeconds(t.getTimeoutSeconds());
             tr.setStatus(TaskRun.TaskStatus.PENDING);
             tr.setRetryCount(0);
-            if (t.getMaxRetries() != null) tr.setMaxRetries(t.getMaxRetries());
+            if (t.getMaxRetries() != null)
+                tr.setMaxRetries(t.getMaxRetries());
             taskRunRepository.save(tr);
         }
 
@@ -95,13 +97,12 @@ public class WorkflowOrchestrator {
             String taskType = TaskType.fromString(defTask != null ? defTask.getTaskType() : null).name();
 
             redisPublisher.publishTask(
-                run.getId(),
-                rootTaskId,
-                taskType,
-                defTask == null ? null : defTask.getCommand(),
-                defTask == null ? null : defTask.getName(),
-                defTask == null ? null : defTask.getTimeoutSeconds()
-            );
+                    run.getId(),
+                    rootTaskId,
+                    taskType,
+                    defTask == null ? null : defTask.getCommand(),
+                    defTask == null ? null : defTask.getName(),
+                    defTask == null ? null : defTask.getTimeoutSeconds());
             log.info("Enqueued root task {} (type={}) for run {}", rootTaskId, taskType, run.getId());
         }
 
@@ -110,16 +111,18 @@ public class WorkflowOrchestrator {
 
     @Transactional
     public void onTaskCompleted(String workflowRunId, String taskId, boolean success, String lastError) {
-        log.info("Task completed callback: run={} task={} success={} error={}", workflowRunId, taskId, success, lastError);
+        log.info("Task completed callback: run={} task={} success={} error={}", workflowRunId, taskId, success,
+                lastError);
 
-        TaskRun tr = taskRunRepository.findByWorkflowRunIdAndTaskId(workflowRunId, taskId);
-        if (tr == null) {
+        Optional<TaskRun> trOpt = taskRunRepository.findByWorkflowRunIdAndTaskIdWithLock(workflowRunId, taskId);
+        if (trOpt.isEmpty()) {
             log.warn("TaskRun not found for run={}, task={}", workflowRunId, taskId);
             return;
         }
+        TaskRun tr = trOpt.get();
 
         if (tr.getStatus() == TaskRun.TaskStatus.SUCCESS ||
-            tr.getStatus() == TaskRun.TaskStatus.FAILED) {
+                tr.getStatus() == TaskRun.TaskStatus.FAILED) {
             log.warn("Task {} already completed with status {}, ignoring duplicate callback", taskId, tr.getStatus());
             return;
         }
@@ -145,7 +148,8 @@ public class WorkflowOrchestrator {
                 }
 
                 if (childTr.getStatus() != TaskRun.TaskStatus.PENDING) {
-                    log.warn("Ready task {} has unexpected status: {} (expected PENDING)", readyTaskId, childTr.getStatus());
+                    log.warn("Ready task {} has unexpected status: {} (expected PENDING)", readyTaskId,
+                            childTr.getStatus());
                     continue;
                 }
 
@@ -153,17 +157,18 @@ public class WorkflowOrchestrator {
                 taskRunRepository.save(childTr);
 
                 redisPublisher.publishTask(
-                    workflowRunId,
-                    readyTaskId,
-                    childTr.getTaskType(),
-                    childTr.getCommand(),
-                    childTr.getTaskName(),
-                    childTr.getTimeoutSeconds()
-                );
-                log.info("Enqueued ready task {} (type={}, timeout={}s) for run {}", readyTaskId, childTr.getTaskType(), childTr.getTimeoutSeconds(), workflowRunId);
+                        workflowRunId,
+                        readyTaskId,
+                        childTr.getTaskType(),
+                        childTr.getCommand(),
+                        childTr.getTaskName(),
+                        childTr.getTimeoutSeconds());
+                log.info("Enqueued ready task {} (type={}, timeout={}s) for run {}", readyTaskId, childTr.getTaskType(),
+                        childTr.getTimeoutSeconds(), workflowRunId);
             }
 
-            long incompleteCount = taskRunRepository.countByWorkflowRunIdAndStatusNot(workflowRunId, TaskRun.TaskStatus.SUCCESS);
+            long incompleteCount = taskRunRepository.countByWorkflowRunIdAndStatusNot(workflowRunId,
+                    TaskRun.TaskStatus.SUCCESS);
             boolean allDone = (incompleteCount == 0);
 
             if (allDone) {
@@ -186,16 +191,16 @@ public class WorkflowOrchestrator {
 
             if (tr.getRetryCount() <= tr.getMaxRetries()) {
                 log.info("Retrying task {} (type={}, timeout={}s) for run {} (attempt {}/{})",
-                        taskId, tr.getTaskType(), tr.getTimeoutSeconds(), workflowRunId, tr.getRetryCount(), tr.getMaxRetries());
+                        taskId, tr.getTaskType(), tr.getTimeoutSeconds(), workflowRunId, tr.getRetryCount(),
+                        tr.getMaxRetries());
 
                 redisPublisher.publishTask(
-                    workflowRunId,
-                    taskId,
-                    tr.getTaskType(),
-                    tr.getCommand(),
-                    tr.getTaskName(),
-                    tr.getTimeoutSeconds()
-                );
+                        workflowRunId,
+                        taskId,
+                        tr.getTaskType(),
+                        tr.getCommand(),
+                        tr.getTaskName(),
+                        tr.getTimeoutSeconds());
             } else {
                 tr.setStatus(TaskRun.TaskStatus.FAILED);
                 tr.setFinishedAt(java.time.LocalDateTime.now());
@@ -207,7 +212,8 @@ public class WorkflowOrchestrator {
                     run.setFinishedAt(java.time.LocalDateTime.now());
                     workflowRunRepository.save(run);
                 }
-                log.warn("Task {} permanently failed after {} retries. Workflow {} marked FAILED.", taskId, tr.getRetryCount(), workflowRunId);
+                log.warn("Task {} permanently failed after {} retries. Workflow {} marked FAILED.", taskId,
+                        tr.getRetryCount(), workflowRunId);
 
                 redisDagCache.deleteDag(workflowRunId);
                 dependencyTracker.cleanup(workflowRunId);
