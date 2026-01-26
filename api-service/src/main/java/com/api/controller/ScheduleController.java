@@ -19,8 +19,6 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import java.util.List;
 import java.util.Map;
 
-
-
 @RestController
 @RequestMapping("/api/schedules")
 @RequiredArgsConstructor
@@ -38,21 +36,21 @@ public class ScheduleController {
     }
 
     @GetMapping
-    public ResponseEntity<List<WorkflowScheduleResponseDTO>>getAllSchedules(){
+    public ResponseEntity<List<WorkflowScheduleResponseDTO>> getAllSchedules() {
         log.info("Getting all schedules");
         List<WorkflowScheduleResponseDTO> schedules = scheduleService.listAllSchedules();
         return ResponseEntity.ok(schedules);
     }
 
-    @GetMapping("/{id")
-    public ResponseEntity<WorkflowScheduleResponseDTO> getScheduleById(@PathVariable String id){
+    @GetMapping("/{id}")
+    public ResponseEntity<WorkflowScheduleResponseDTO> getScheduleById(@PathVariable String id) {
         log.info("Getting schedule by id: id={}", id);
         WorkflowScheduleResponseDTO response = scheduleService.getScheduleById(id);
         return ResponseEntity.ok(response);
     }
 
-    @DeleteMapping("/{id")
-    public ResponseEntity<WorkflowScheduleResponseDTO> deleteScheduleById(@PathVariable String id){
+    @DeleteMapping("/{id}")
+    public ResponseEntity<WorkflowScheduleResponseDTO> deleteScheduleById(@PathVariable String id) {
         log.info("Deleting schedule by id: id={}", id);
         scheduleService.deleteScheduleById(id);
         return ResponseEntity.noContent().build();
@@ -63,9 +61,8 @@ public class ScheduleController {
         log.info("Manual trigger for schedule: id={}", id);
         String workflowRunId = workflowScheduler.triggerManually(id);
         return ResponseEntity.ok(Map.of(
-            "message", "Schedule triggered successfully",
-            "workflowRunId", workflowRunId
-        ));
+                "message", "Schedule triggered successfully",
+                "workflowRunId", workflowRunId));
     }
 
     @PostMapping("/{id}/pause")

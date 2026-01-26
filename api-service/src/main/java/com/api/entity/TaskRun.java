@@ -35,7 +35,7 @@ public class TaskRun {
 
     private String taskName;
     private String command;
-    private String taskType = "SHELL";
+    private String taskType;
     private Integer timeoutSeconds;
 
     @Enumerated(EnumType.STRING)

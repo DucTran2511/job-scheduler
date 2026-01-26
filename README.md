@@ -1,235 +1,185 @@
 # Job Scheduler - Distributed Workflow Orchestration Platform
 
-A distributed **DAG-based workflow orchestration platform** built with Java 21 and Spring Boot. Define complex workflows in YAML, execute tasks across distributed workers, and monitor progress in real-time.
+A high-performance, distributed workflow engine built for scale and resilience. Unlike simple cron scripts or single-node schedulers, this system is designed to run across a cluster of nodes, handling failures and high concurrency with ease.
 
-[![Java Version](https://img.shields.io/badge/Java-21-orange)](https://openjdk.org/projects/jdk/21/)
+[![Java 21](https://img.shields.io/badge/Java-21-orange)](https://openjdk.org/projects/jdk/21/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.6-brightgreen)](https://spring.io/projects/spring-boot)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-7-red)](https://redis.io/)
-[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue)](https://www.postgresql.org/)
 
 ---
 
-## Features
+## 🚀 Core Distributed Capabilities
 
-- **YAML-Based Workflow Definition** — Define complex DAGs with dependencies, retries, and timeouts
-- **Automatic Dependency Resolution** — Tasks execute in correct topological order with cycle detection
-- **Distributed Worker Architecture** — Scale horizontally with Redis Streams consumer groups
-- **High Concurrency** — Up to 1,000 concurrent tasks per worker using Java Virtual Threads
-- **Built-in Retry Logic** — Configurable retries with automatic failure handling
-- **Cron Scheduling** — Schedule recurring workflows with timezone support
-- **Real-time Monitoring** — Query workflow status, task progress, and execution history
-- **Production Ready** — Health checks, structured logging, and standardized error responses
+### 1. Horizontal Scaling (Consumer Groups)
+The system uses **Redis Streams Consumer Groups** to distribute tasks.
+- **Load Balancing**: You can spin up 1, 10, or 100 `worker-service` instances. Redis automatically distributes pending tasks among them.
+- **No "Master" Worker**: All workers are equal peers.
+- **Implementation**: See `TaskStreamConsumer.java`. It uses `XREADGROUP` to pull tasks and `XACK` to acknowledge completion only after success.
 
----
+### 2. Distributed Scheduling (Leaderless)
+The `api-service` handles cron scheduling without a dedicated "leader" node.
+- **Mechanism**: Uses **Redis Distributed Locks** (`SET NX PX`).
+- **How it works**: When a schedule is due (e.g., every hour), all API instances wake up. Only *one* instance succeeds in acquiring the lock for that specific schedule. That instance triggers the workflow, while others stand down.
+- **Benefit**: High availability. If one API node dies, others continue triggering schedules.
 
-## Architecture
+### 3. Fault Tolerance (Zombie Detection)
+The system survives hard crashes (e.g., `kill -9`, OOM, Power Failure).
+- **Heartbeats**: Running tasks send a heartbeat to Redis every 10 seconds.
+- **Reaper**: The `ZombieTaskReaper` runs in the background. If a task stops heartbeating for >45s, it is marked as `FAILED` (Zombie).
+- **Auto-Retry**: If the task has `maxRetries > 0`, the orchestrator automatically re-queues it, and a *healthy* worker picks it up.
+| `GET` | `/actuator/metrics` | Prometheus metrics |
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                              User / API Client                           │
-└───────────────────────────────────┬─────────────────────────────────────┘
-                                    │ REST API
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           API Service (Port 8080)                        │
-│  ┌─────────────────┐  ┌──────────────────┐  ┌───────────────────────┐   │
-│  │ WorkflowController│ │ WorkflowOrchestrator│ │     DagParser       │   │
-│  └───────┬─────────┘  └─────────┬────────┘  │  (JGraphT + YAML)     │   │
-│          │                      │           └───────────────────────┘   │
-│          │                      ▼                                       │
-│  ┌───────▼───────────────────────────────────────────────────────────┐  │
-│  │                        RedisPublisher                              │  │
-│  │                    (XADD to tasks_stream)                          │  │
-│  └───────────────────────────────────────────────────────────────────┘  │
-└────────────────────────────────────┬────────────────────────────────────┘
-                                     │
-        ┌────────────────────────────┼────────────────────────────────┐
-        │                            │                                │
-        ▼                            ▼                                ▼
-┌───────────────┐          ┌───────────────┐                ┌───────────────┐
-│   PostgreSQL  │          │     Redis     │                │    Worker     │
-│               │          │   (Streams)   │◄───────────────│   Service(s)  │
-│  • workflows  │          │               │  XREADGROUP    │               │
-│  • runs       │          │ tasks_stream  │                │  • ShellExec  │
-│  • tasks      │          │ dag:{runId}   │                │  • HTTPExec   │
-│  • schedules  │          │ worker-group  │                │  • DockerExec │
-└───────────────┘          └───────────────┘                └───────────────┘
-```
+### Cron Scheduling
 
----
+You can schedule workflows to run automatically using standard Cron expressions.
 
-## Quick Start
-
-### Prerequisites
-
-- Java 21+
-- Maven 3.9+
-- Docker & Docker Compose
-
-### 1. Clone and Start Infrastructure
-
+**Create a Schedule:**
 ```bash
-git clone https://github.com/yourusername/job-scheduler.git
-cd job-scheduler
+curl -X POST http://localhost:80/api/schedules \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Daily Report",
+    "cronExpression": "0 0 8 * * *",  # Run at 8:00 AM daily
+    "timezone": "UTC",
+    "workflowDefinition": "name: report\ntasks:\n  - id: t1\n    command: echo report"
+  }'
+```
 
-# Start PostgreSQL and Redis
+**How it works:**
+- The `api-service` uses **Distributed Locks** to ensure only *one* instance triggers the schedule, even if you have 10 API nodes running.
+
+### 4. Real OS Process Isolation
+Tasks are not just internal threads; they are real OS processes.
+- **Shell Executor**: Uses `ProcessBuilder` to spawn a completely separate process (PID).
+- **Control**: The worker monitors the PID, captures `stdout`/`stderr` in real-time, and enforces hard timeouts (killing the process tree if needed).
+
+---
+
+## 🛠️ How It Works
+
+### The Lifecycle of a Job
+
+1.  **Submission**: User POSTs a YAML workflow to `api-service`.
+2.  **Parsing**: The DAG is parsed, validated, and persisted to PostgreSQL.
+3.  **Queueing**: Root tasks (tasks with no dependencies) are pushed to the Redis Stream `tasks_stream`.
+4.  **Execution**:
+    - A `worker-service` instance pulls the message.
+    - It spawns a child process (e.g., `bash -c "echo hello"`).
+    - It streams logs and sends heartbeats.
+5.  **Completion**:
+    - Worker reports success to `api-service` via webhook.
+    - `api-service` checks the DAG for dependent tasks.
+    - If Task A finishes, and Task B depends on A, Task B is now enqueued.
+
+---
+
+## 📦 Quick Start
+
+### 1. Start PostgreSQL and Redis
+```bash
 docker-compose up -d postgres redis
 ```
 
-### 2. Build the Project
+### 2. Build and Run
+You can use the provided `Makefile` for easy management.
 
 ```bash
-./mvnw clean install
+# Run single-node setup (Dev)
+make up
+
+# Run distributed cluster (Prod Simulation)
+make cluster-up
+
+# View logs
+make logs          # for single node
+make cluster-logs  # for cluster
+
+# Stop everything
+make down          # for single node
+make cluster-down  # for cluster
 ```
 
-### 3. Run Services
+### 3. Run the Cluster (Advanced)
+To simulate a real production environment with **Load Balancing** and **Multiple Workers**:
 
 ```bash
-# Terminal 1: API Service
+# Starts:
+# - 1 Nginx Load Balancer (Port 80)
+# - 2 API Service Instances
+# - 3 Worker Service Instances
+# - PostgreSQL + Redis
+docker-compose -f docker-compose.cluster.yml up -d --build
+```
+
+Access the API via Nginx at `http://localhost:80`.
+
+### 3. Run Services (Manual Dev Mode)
+You can run multiple instances to test distribution:
+
+```bash
+# Start API (Scheduler & Orchestrator)
 ./mvnw -pl api-service spring-boot:run
 
-# Terminal 2: Worker Service
+# Start Worker 1
+./mvnw -pl worker-service spring-boot:run
+
+# Start Worker 2 (in another terminal)
 ./mvnw -pl worker-service spring-boot:run
 ```
 
-### 4. Submit Your First Workflow
-
-Create a file `hello-workflow.yaml`:
-
-```yaml
-name: hello_world
-description: My first workflow
-tasks:
-  - id: greet
-    name: Say Hello
-    command: echo "Hello from Job Scheduler!"
-    
-  - id: timestamp
-    name: Print Timestamp
-    command: date
-    depends_on: [greet]
-```
-
-Submit it:
-
+### 3. Submit a Workflow
 ```bash
 curl -X POST http://localhost:8080/api/workflows/start \
   -H "Content-Type: text/plain" \
-  --data-binary @hello-workflow.yaml
+  --data-binary @- <<EOF
+name: "distributed-demo"
+tasks:
+  - id: task-1
+    name: "Heavy Computation"
+    taskType: SHELL
+    command: "sleep 10; echo 'Done'"
+EOF
 ```
 
-Check status:
+---
 
+## 🔍 Monitoring & Observability
+
+Since this is a distributed system, we provide tools to inspect the cluster state.
+
+### Visualize Database
+Run `./visualize-database.sh` to see:
+- Active Workflow Runs
+- Failed Tasks (with error logs)
+- Queue Depth
+
+### Check Worker Status
 ```bash
-curl http://localhost:8080/api/workflows/{workflow-run-id}
+# See all consumers in the group
+docker exec job-scheduler-redis redis-cli XINFO CONSUMERS tasks_stream worker-group
 ```
 
 ---
 
-## Workflow Definition
+## 🧩 Configuration
 
-### Basic Structure
-
-```yaml
-name: my_workflow
-description: Optional description
-tasks:
-  - id: task_1           # Unique identifier (required)
-    name: Task Name      # Display name
-    command: echo "hi"   # Shell command to execute
-    taskType: SHELL      # SHELL (default), HTTP, PYTHON, DOCKER
-    max_retries: 3       # Retry on failure (default: 3)
-    timeout_seconds: 300 # Timeout in seconds
-    depends_on:          # List of task IDs this depends on
-      - other_task
-```
-
-### Parallel Execution Example
-
-```yaml
-name: parallel_demo
-tasks:
-  # These run in parallel (no dependencies)
-  - id: crawl_site_a
-    command: python3 crawl.py --site a
-    
-  - id: crawl_site_b
-    command: python3 crawl.py --site b
-    
-  - id: crawl_site_c
-    command: python3 crawl.py --site c
-    
-  # This waits for all crawls to complete
-  - id: merge_results
-    command: python3 merge.py
-    depends_on: [crawl_site_a, crawl_site_b, crawl_site_c]
-    
-  # Final step
-  - id: notify
-    command: curl -X POST $SLACK_WEBHOOK -d '{"text":"Done!"}'
-    depends_on: [merge_results]
-```
+| Service | Env Variable | Default | Description |
+|---------|--------------|---------|-------------|
+| **Common** | `REDIS_HOST` | localhost | Redis connection |
+| **API** | `SCHEDULER_LOCK_TIMEOUT` | 300s | How long to hold schedule lock |
+| **Worker** | `WORKER_MAX_CONCURRENT` | 1000 | Max virtual threads per worker |
+| **Worker** | `WORKER_POLL_TIMEOUT` | 2s | Long-polling duration for Redis |
 
 ---
 
-## API Reference
+## 🏗️ Tech Stack
 
-### Workflow Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/workflows/start` | Submit workflow (YAML body) |
-| `GET` | `/api/workflows` | List all workflow runs |
-| `GET` | `/api/workflows/{runId}` | Get workflow run details |
-| `GET` | `/api/workflows/{runId}/tasks` | Get all tasks for a run |
-| `POST` | `/api/workflows/{runId}/cancel` | Cancel a running workflow |
-
-### Schedule Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/schedules` | Create scheduled workflow |
-| `GET` | `/api/schedules` | List all schedules |
-| `DELETE` | `/api/schedules/{id}` | Delete a schedule |
-
-### Health Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/actuator/health` | Service health check |
-| `GET` | `/actuator/metrics` | Prometheus metrics |
-
----
-
-## Project Structure
-
-```
-job-scheduler/
-├── pom.xml                     # Parent POM (multi-module)
-├── docker-compose.yaml         # PostgreSQL + Redis + Services
-│
-├── common/                     # Shared module
-│   └── src/main/java/com/common/
-│       ├── dto/                # DagDefinition, TaskDef
-│       └── enums/              # TaskType enum
-│
-├── api-service/                # Orchestration API
-│   └── src/main/java/com/api/
-│       ├── controller/         # REST endpoints
-│       ├── orchestrator/       # Core workflow logic
-│       ├── entity/             # JPA entities
-│       ├── repository/         # Data access
-│       ├── messaging/          # Redis publisher
-│       └── scheduler/          # Cron scheduling
-│
-└── worker-service/             # Task executor
-    └── src/main/java/com/worker/
-        ├── service/            # Stream consumer
-        ├── executor/           # ShellTaskExecutor, etc.
-        └── model/              # ExecutionContext, Result
-```
-
+*   **Language**: Java 21 (Virtual Threads)
+*   **Framework**: Spring Boot 3.5.6
+*   **Orchestration**: JGraphT (DAG Management)
+*   **Messaging**: Redis Streams
+*   **Storage**: PostgreSQL 16
 ---
 
 ## Configuration
@@ -318,7 +268,6 @@ This platform is designed for:
 - [ ] Multi-tenancy support
 
 ---
-
 ## Contributing
 
 1. Fork the repository

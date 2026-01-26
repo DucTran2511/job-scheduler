@@ -1,0 +1,76 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: job-scheduler-db
+    restart: always
+    environment:
+      POSTGRES_USER: jobuser
+      POSTGRES_PASSWORD: jobpass
+      POSTGRES_DB: jobdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobuser -d jobdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: job-scheduler-redis
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    image: nginx:alpine
+    container_name: job-scheduler-lb
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api-service
+
+  api-service:
+    build:
+      context: .
+      dockerfile: api-service/Dockerfile
+    deploy:
+      replicas: 2  # Start 2 API instances by default
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432how to run ?
+      DB_USER: jobuser
+      DB_PASSWORD: jobpass
+      DB_NAME: jobdb
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JOB_SCHEDULER_ZOMBIE_CHECK_RATE_MS: 30000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker-service:
+    build:
+      context: .
+      dockerfile: worker-service/Dockerfile
+    deploy:
+      replicas: 3  # Start 3 Worker instances by default
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ORCHESTRATOR_CALLBACK_URL: http://nginx:80/api/workflows/task/callback
+    depends_on:
+      redis:
+        condition: service_healthy
+      api-service:
+        condition: service_started
+
+volumes:
+  postgres_data:

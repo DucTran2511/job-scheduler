@@ -177,11 +177,10 @@ public class TaskStreamConsumer {
             return (List<MapRecord<String, Object, Object>>) (List<?>) redisTemplate.opsForStream().read(
                     Consumer.from(consumerGroup, consumerName),
                     StreamReadOptions.empty().block(Duration.ofSeconds(pollTimeoutSeconds)),
-                    StreamOffset.create(streamKey, ReadOffset.lastConsumed())
-            );
+                    StreamOffset.create(streamKey, ReadOffset.lastConsumed()));
         } catch (Exception e) {
             if (e.getMessage() != null &&
-                (e.getMessage().contains("NOGROUP") || e.getMessage().contains("no such key"))) {
+                    (e.getMessage().contains("NOGROUP") || e.getMessage().contains("no such key"))) {
                 log.debug("Stream or consumer group not ready yet, will retry...");
                 ensureConsumerGroupExists();
                 return null;
@@ -205,7 +204,8 @@ public class TaskStreamConsumer {
                 taskType = "SHELL";
             }
 
-            log.info("[{}] Processing task: workflowRunId={}, taskId={}, type={}", threadName, workflowRunId, taskId, taskType);
+            log.info("[{}] Processing task: workflowRunId={}, taskId={}, type={}", threadName, workflowRunId, taskId,
+                    taskType);
 
             TaskExecutionContext context = buildExecutionContext(messageData, workflowRunId, taskId, taskType);
             TaskExecutionResult result = executeTask(context);
@@ -230,9 +230,9 @@ public class TaskStreamConsumer {
     }
 
     private TaskExecutionContext buildExecutionContext(Map<Object, Object> messageData,
-                                                       String workflowRunId,
-                                                       String taskId,
-                                                       String taskType) {
+            String workflowRunId,
+            String taskId,
+            String taskType) {
         Map<String, Object> config = new HashMap<>();
 
         if (messageData.containsKey("command")) {
