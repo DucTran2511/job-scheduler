@@ -3,6 +3,7 @@ package com.worker.executor.impl;
 import com.worker.executor.TaskExecutor;
 import com.worker.model.TaskExecutionContext;
 import com.worker.model.TaskExecutionResult;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -12,15 +13,34 @@ import java.io.InputStreamReader;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import com.common.service.RedisHeartbeatService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class ShellTaskExecutor implements TaskExecutor {
+
+    private final RedisHeartbeatService heartbeatService;
 
     @Override
     public TaskExecutionResult execute(TaskExecutionContext context) {
         long startTime = System.currentTimeMillis();
 
+        ScheduledExecutorService heartbeatScheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
+        ScheduledFuture<?> heartbeatFuture = null;
+
         try {
+            heartbeatFuture = heartbeatScheduler.scheduleAtFixedRate(() -> {
+                try {
+                    heartbeatService.sendHeartbeat(context.getWorkflowRunId(), context.getTaskId());
+                } catch (Exception e) {
+                    log.error("Failed to send heartbeat", e);
+                }
+            }, 0, 10, TimeUnit.SECONDS);
+
             String command = context.getConfigString("command");
             if (command == null || command.trim().isEmpty()) {
                 return TaskExecutionResult.failure("Shell command is required but not provided");
@@ -93,6 +113,11 @@ public class ShellTaskExecutor implements TaskExecutor {
                     .errorMessage("Exception during execution: " + e.getMessage())
                     .executionTimeMs(duration)
                     .build();
+        } finally {
+            if (heartbeatFuture != null) {
+                heartbeatFuture.cancel(true);
+            }
+            heartbeatScheduler.shutdown();
         }
     }
 
