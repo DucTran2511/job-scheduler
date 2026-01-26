@@ -1,0 +1,92 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: job-scheduler-db
+    restart: always
+    environment:
+      POSTGRES_USER: jobuser
+      POSTGRES_PASSWORD: jobpass
+      POSTGRES_DB: jobdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobuser -d jobdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7
+    container_name: job-scheduler-redis
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  api-service:
+    build:
+      context: .
+      dockerfile: api-service/Dockerfile
+    image: job-scheduler-api:latest
+    container_name: job-scheduler-api
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: jobuser
+      DB_PASSWORD: jobpass
+      DB_NAME: jobdb
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JOB_SCHEDULER_ZOMBIE_CHECK_RATE_MS: 30000
+      JOB_SCHEDULER_ZOMBIE_GRACE_PERIOD_SECONDS: 45
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  worker-service:
+    build:
+      context: .
+      dockerfile: worker-service/Dockerfile
+    image: job-scheduler-worker:latest
+    container_name: job-scheduler-worker
+    restart: always
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: jobuser
+      DB_PASSWORD: jobpass
+      DB_NAME: jobdb
+      ORCHESTRATOR_CALLBACK_URL: http://api-service:8080/api/workflows/task/callback
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api-service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8081/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  postgres_data:

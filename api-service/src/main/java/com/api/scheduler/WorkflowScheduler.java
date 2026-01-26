@@ -29,7 +29,7 @@ public class WorkflowScheduler {
 
     @Value("${scheduler.lock.timeout-seconds:300}")
     private int lockTimeoutSeconds;
-
+    
     private final WorkflowScheduleRepository scheduleRepository;
     private final ScheduleExecutionRepository executionRepository;
     private final WorkflowRunRepository workflowRunRepository;
@@ -55,7 +55,7 @@ public class WorkflowScheduler {
 
     private void processScheduleWithLock(WorkflowSchedule schedule) {
         String lockKey = "schedule:" + schedule.getId();
-
+        
         if (!distributedLock.tryLock(lockKey, Duration.ofSeconds(lockTimeoutSeconds))) {
             log.debug("Schedule {} is being processed by another instance, skipping", schedule.getId());
             return;

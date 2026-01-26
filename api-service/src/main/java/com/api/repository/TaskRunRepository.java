@@ -13,7 +13,7 @@ import java.util.Optional;
 @Repository
 public interface TaskRunRepository extends JpaRepository<TaskRun, String> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT t FROM TaskRun t WHERE t.workflowRunId = :runId AND t.taskId = :taskId")
+    @Query("SELECT t FROM TaskRun t WHERE t.workflowRun.id = :runId AND t.taskId = :taskId")
     Optional<TaskRun> findByWorkflowRunIdAndTaskIdWithLock(String runId, String taskId);
 
     TaskRun findByWorkflowRunIdAndTaskId(String workflowRunId, String taskId);

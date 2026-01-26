@@ -45,13 +45,12 @@ public class OrchestratorCallbackService {
             attempt++;
             try {
                 log.debug("Reporting task completion to orchestrator (attempt {}/{}): {}",
-                         attempt, maxRetries, payload.get("taskId"));
+                        attempt, maxRetries, payload.get("taskId"));
 
                 ResponseEntity<Void> response = restTemplate.postForEntity(
                         callbackUrl,
                         payload,
-                        Void.class
-                );
+                        Void.class);
 
                 if (response.getStatusCode().is2xxSuccessful()) {
                     log.info("Successfully reported task {} completion to orchestrator",
@@ -63,8 +62,8 @@ public class OrchestratorCallbackService {
 
             } catch (RestClientException e) {
                 lastException = e;
-                log.error("❌ Failed to report to orchestrator (attempt {}/{}): {}",
-                         attempt, maxRetries, e.getMessage());
+                log.error("Failed to report to orchestrator (attempt {}/{}): {}",
+                        attempt, maxRetries, e.getMessage());
 
                 if (attempt < maxRetries) {
                     try {
@@ -79,7 +78,7 @@ public class OrchestratorCallbackService {
         }
 
         log.error("Failed to report task {} completion after {} attempts. Last error: {}",
-                 payload.get("taskId"), maxRetries,
-                 lastException != null ? lastException.getMessage() : "Unknown");
+                payload.get("taskId"), maxRetries,
+                lastException != null ? lastException.getMessage() : "Unknown");
     }
 }

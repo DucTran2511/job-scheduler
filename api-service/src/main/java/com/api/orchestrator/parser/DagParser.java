@@ -1,6 +1,5 @@
 package com.api.orchestrator.parser;
 
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.common.dto.DagDefinition;
@@ -17,7 +16,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-
 @Slf4j
 @Component
 public class DagParser {
@@ -33,11 +31,12 @@ public class DagParser {
     }
 
     public DirectedAcyclicGraph<String, DefaultEdge> buildGraph(DagDefinition def) {
-        if (def == null) throw new IllegalArgumentException("DagDefinition is null");
-        if (def.getTasks() == null) throw new IllegalArgumentException("No tasks defined in DAG");
+        if (def == null)
+            throw new IllegalArgumentException("DagDefinition is null");
+        if (def.getTasks() == null)
+            throw new IllegalArgumentException("No tasks defined in DAG");
 
-        DirectedAcyclicGraph<String, DefaultEdge> dag =
-                new DirectedAcyclicGraph<>(DefaultEdge.class);
+        DirectedAcyclicGraph<String, DefaultEdge> dag = new DirectedAcyclicGraph<>(DefaultEdge.class);
 
         Set<String> taskIds = new HashSet<>();
         for (TaskDef t : def.getTasks()) {
@@ -47,17 +46,24 @@ public class DagParser {
             if (!taskIds.add(t.getId())) {
                 throw new IllegalArgumentException("Duplicate task id: " + t.getId());
             }
+            validateTask(t);
             dag.addVertex(t.getId());
         }
 
         for (TaskDef t : def.getTasks()) {
             List<String> deps = t.getDepends_on();
-            if (deps == null) continue;
+            if (deps == null)
+                continue;
             for (String dep : deps) {
                 if (!dag.containsVertex(dep)) {
-                    throw new IllegalArgumentException("Task '" + t.getId() + "' depends on unknown task '" + dep + "'");
+                    throw new IllegalArgumentException(
+                            "Task '" + t.getId() + "' depends on unknown task '" + dep + "'");
                 }
-                dag.addEdge(dep, t.getId());
+                try {
+                    dag.addEdge(dep, t.getId());
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("Cycle detected in DAG: " + e.getMessage());
+                }
             }
         }
 
@@ -73,7 +79,19 @@ public class DagParser {
     public List<String> topologicalOrder(DirectedAcyclicGraph<String, DefaultEdge> dag) {
         List<String> ordered = new ArrayList<>();
         TopologicalOrderIterator<String, DefaultEdge> it = new TopologicalOrderIterator<>(dag);
-        while (it.hasNext()) ordered.add(it.next());
+        while (it.hasNext())
+            ordered.add(it.next());
         return ordered;
+    }
+
+    private void validateTask(TaskDef t) {
+        String type = t.getTaskType();
+        boolean isShell = type == null || type.trim().isEmpty() || "SHELL".equalsIgnoreCase(type);
+
+        if (isShell) {
+            if (t.getCommand() == null || t.getCommand().trim().isEmpty()) {
+                throw new IllegalArgumentException("Task '" + t.getId() + "' of type SHELL must have a command");
+            }
+        }
     }
 }

@@ -52,11 +52,49 @@ public class WorkflowQueryService {
 
     @Transactional(readOnly = true)
     public WorkflowRunDetailDTO getWorkflowDetail(String runId) {
-        return null;
+        WorkflowRun run = workflowRunRepository.findById(runId)
+                .orElseThrow(() -> new RuntimeException("Workflow run not found: " + runId));
+
+        List<TaskRun> tasks = taskRunRepository.findByWorkflowRunId(runId);
+
+        int completed = 0, failed = 0, running = 0, pending = 0;
+        for (TaskRun t : tasks) {
+            switch (t.getStatus()) {
+                case SUCCESS -> completed++;
+                case FAILED -> failed++;
+                case RUNNING -> running++;
+                case PENDING -> pending++;
+            }
+        }
+
+        Long duration = null;
+        if (run.getStartedAt() != null && run.getFinishedAt() != null) {
+            duration = Duration.between(run.getStartedAt(), run.getFinishedAt()).getSeconds();
+        }
+
+        return WorkflowRunDetailDTO.builder()
+                .id(run.getId())
+                .workflowId(run.getWorkflow() != null ? run.getWorkflow().getId() : null)
+                .workflowName(run.getWorkflow() != null ? run.getWorkflow().getName() : null)
+                .workflowDescription(run.getWorkflow() != null ? run.getWorkflow().getDescription() : null)
+                .status(run.getStatus().name())
+                .startedAt(run.getStartedAt())
+                .finishedAt(run.getFinishedAt())
+                .durationSeconds(duration)
+                .totalTasks(tasks.size())
+                .completedTasks(completed)
+                .failedTasks(failed)
+                .runningTasks(running)
+                .pendingTasks(pending)
+                .tasks(tasks.stream().map(TaskRunDTO::from).collect(Collectors.toList()))
+                .build();
     }
 
     @Transactional(readOnly = true)
     public List<TaskRunDTO> getWorkflowTasks(String runId) {
-        return null;
+        List<TaskRun> tasks = taskRunRepository.findByWorkflowRunId(runId);
+        return tasks.stream()
+                .map(TaskRunDTO::from)
+                .collect(Collectors.toList());
     }
 }
