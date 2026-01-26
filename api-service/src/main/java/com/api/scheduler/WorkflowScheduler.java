@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
@@ -26,8 +27,8 @@ import java.util.List;
 @Slf4j
 public class WorkflowScheduler {
 
-    private static final String SCHEDULER_LOCK = "workflow-scheduler";
-    private static final Duration LOCK_TIMEOUT = Duration.ofSeconds(55);
+    @Value("${scheduler.lock.timeout-seconds:300}")
+    private int lockTimeoutSeconds;
 
     private final WorkflowScheduleRepository scheduleRepository;
     private final ScheduleExecutionRepository executionRepository;
@@ -37,26 +38,54 @@ public class WorkflowScheduler {
 
     @Scheduled(fixedRateString = "${scheduler.poll.interval-ms:60000}")
     public void checkAndTriggerDueSchedules() {
-        if (!distributedLock.tryLock(SCHEDULER_LOCK, LOCK_TIMEOUT)) {
-            log.debug("Another instance is handling schedules, skipping...");
+        LocalDateTime now = LocalDateTime.now();
+        List<WorkflowSchedule> dueSchedules = scheduleRepository.findDueSchedules(ScheduleStatus.ACTIVE, now);
+
+        if (dueSchedules.isEmpty()) {
+            log.debug("No due schedules found at {}", now);
             return;
         }
-        try {
-            LocalDateTime now = LocalDateTime.now();
-            List<WorkflowSchedule> dueSchedules = scheduleRepository.findDueSchedules(ScheduleStatus.ACTIVE, now);
 
-            if (dueSchedules.isEmpty()) {
-                log.debug("No due schedules found at {}", now);
+        log.info("Found {} due schedule(s) to process", dueSchedules.size());
+
+        for (WorkflowSchedule schedule : dueSchedules) {
+            processScheduleWithLock(schedule);
+        }
+    }
+
+    private void processScheduleWithLock(WorkflowSchedule schedule) {
+        String lockKey = "schedule:" + schedule.getId();
+
+        if (!distributedLock.tryLock(lockKey, Duration.ofSeconds(lockTimeoutSeconds))) {
+            log.debug("Schedule {} is being processed by another instance, skipping", schedule.getId());
+            return;
+        }
+
+        try {
+            WorkflowSchedule freshSchedule = scheduleRepository.findById(schedule.getId()).orElse(null);
+            if (freshSchedule == null) {
+                log.warn("Schedule {} not found, may have been deleted", schedule.getId());
                 return;
             }
 
-            log.info("Found {} due schedule(s) to trigger", dueSchedules.size());
-
-            for (WorkflowSchedule schedule : dueSchedules) {
-                triggerSchedule(schedule);
+            if (freshSchedule.getStatus() != ScheduleStatus.ACTIVE) {
+                log.debug("Schedule {} is no longer active, skipping", schedule.getId());
+                return;
             }
+
+            if (freshSchedule.getNextRunAt() == null || freshSchedule.getNextRunAt().isAfter(LocalDateTime.now())) {
+                log.debug("Schedule {} next run time has changed, skipping", schedule.getId());
+                return;
+            }
+
+            log.info("Schedule {} locked for processing", schedule.getId());
+            triggerSchedule(freshSchedule);
+
+        } catch (Exception e) {
+            log.error("Error processing schedule {}: {}", schedule.getId(), e.getMessage(), e);
         } finally {
-            distributedLock.unlock(SCHEDULER_LOCK);
+            distributedLock.unlock(lockKey);
+            log.debug("Released lock for schedule {}", schedule.getId());
         }
     }
 
